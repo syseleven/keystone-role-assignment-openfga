@@ -72,7 +72,7 @@ jobs:
           echo "store_id=${store_id}" >> $GITHUB_OUTPUT
           echo "model_id=${model_id}" >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
