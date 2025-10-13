@@ -134,7 +134,7 @@ jobs:
         run: uwsgi --module "keystone.server.wsgi:initialize_public_application()" --http-socket :5001 -b 65535 --http-keepalive --so-keepalive --logformat "Request %(uri):%(method) returned %(status) in %(msecs)ms" > python.log 2>&1 &
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
 
       - name: Run the tests
         run: uv run pytest keystone_role_assignment_openfga/tests/functional
