@@ -6,7 +6,7 @@ authors = [
 description = "OpenStack Keystone role assignment plugin using OpenFGA"
 readme = {file="README.rst", content-type="text/x-rst"}
 dynamic = ["version"]
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
   "keystone>=24.0",
