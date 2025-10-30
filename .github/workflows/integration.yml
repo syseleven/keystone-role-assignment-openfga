@@ -9,11 +9,11 @@ env:
 
 jobs:
   integration:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         backend: ["openfga", "openfga_sql_multiplex"]
     name: Integration-${{ matrix.backend }}
-    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:17
@@ -35,6 +35,11 @@ jobs:
       OPENFGA_DATASTORE_ENGINE: 'postgres'
       OPENFGA_DATASTORE_URI: 'postgres://openfga:1234@127.0.0.1:5432/openfga'
       OPENFGA_LOG_LEVEL: debug
+      OPENFGA_AUTHN_METHOD: "preshared"
+      OPENFGA_AUTHN_PRESHARED_KEYS: "foobarkey"
+      FGA_API_TOKEN: "foobarkey"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+
     steps:
       - uses: actions/checkout@v5
 
@@ -42,7 +47,7 @@ jobs:
         uses: jaxxstorm/action-install-gh-release@v2.1.0
         with:
           repo: openfga/openfga
-          tag: v1.8.4
+          tag: v1.10.3
           cache: enable
 
       - name: Migrate OpenFGA database
@@ -91,6 +96,7 @@ jobs:
           api_url = http://localhost:8080
           store_id = ${store_id}
           model_id = ${model_id}
+          api_key = foobarkey
           domains_using_sql_backend = ["default"]
 
           [assignment]
