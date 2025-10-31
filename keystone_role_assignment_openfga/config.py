@@ -17,14 +17,19 @@ openfga_group = cfg.OptGroup(
 )
 
 openfga_opts = [
-    cfg.StrOpt("api_url", help="OpenFGA server URL"),
-    cfg.StrOpt("store_id", help="OpenFGA store ID"),
-    cfg.StrOpt("model_id", help="OpenFGA model ID"),
-    cfg.BoolOpt("verify", default=True, help="Verify SSL certificate"),
+    cfg.StrOpt("api_url", help="OpenFGA server URL."),
+    cfg.StrOpt("api_key", help="OpenFGA API token."),
+    cfg.StrOpt("store_id", help="OpenFGA store ID."),
+    cfg.StrOpt("model_id", help="OpenFGA model ID."),
+    cfg.StrOpt(
+        "http_proxy", help="HTTP proxy to use for OpenFGA communication."
+    ),
+    cfg.IntOpt("timeout", default=5, help="HTTP timeout."),
+    cfg.BoolOpt("verify", default=True, help="Verify SSL certificate."),
     cfg.ListOpt(
         "domains_using_sql_backend",
         item_type=types.String,
-        help="Use SQL backend for domains in a list",
+        help="Use SQL backend for domains in a list.",
     ),
 ]
 

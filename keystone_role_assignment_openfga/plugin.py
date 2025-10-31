@@ -11,10 +11,14 @@
 # under the License.
 
 import typing as ty
+import threading
 
-import keystone.conf
 import oslo_config
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+import keystone.conf
 from keystone import exception
 from keystone.assignment.backends import base
 from keystone.common import provider_api
@@ -25,6 +29,9 @@ from keystone_role_assignment_openfga import config
 CONF = keystone.conf.CONF
 LOG = log.getLogger(__name__)
 PROVIDERS = provider_api.ProviderAPIs
+
+_session = None
+_lock = threading.Lock()
 
 
 def convert_openfga_tuple_to_assignment_base(actor: str, target: str):
@@ -150,6 +157,42 @@ def convert_assignment_to_openfga_tuple(
     return fga_tuple
 
 
+def get_session(max_retries: int = 3, reuse_session: bool = True):
+    """
+    Lazily creates and returns a thread-safe, singleton requests.Session object
+    configured with a robust retry strategy.
+    """
+
+    def _new_session():
+        _session = requests.Session()
+
+        # Configure the retry strategy
+        retry = Retry(
+            total=max_retries,  # Total number of retries
+            backoff_factor=0,
+            status_forcelist=[500, 502, 503, 504],
+        )
+
+        # Mount the retry strategy to the session
+        adapter = HTTPAdapter(max_retries=retry)
+        _session.mount("http://", adapter)
+        _session.mount("https://", adapter)
+
+        return _session
+
+    if reuse_session:
+        # Use a lock to ensure that the session is only created once, even
+        # in a multi-threaded environment.
+        with _lock:
+            global _session
+            if _session is None:
+                # A session is created only if one doesn't already exist.
+                _session = _new_session()
+        return _session
+    else:
+        return _new_session()
+
+
 class OpenFGA(base.AssignmentDriverBase):
     conf: oslo_config.cfg.ConfigOpts
     _openfga: requests.Session
@@ -165,7 +208,6 @@ class OpenFGA(base.AssignmentDriverBase):
 
         self.conf = CONF
         config.register_opts(self.conf)
-        self.openfga = requests.Session()
 
     def _get_roles_by_name(self):
         if not self.roles_by_name:
@@ -185,6 +227,16 @@ class OpenFGA(base.AssignmentDriverBase):
     def fga_session(self):
         if not hasattr(self, "_openfga"):
             self._openfga = requests.Session()
+            if self.conf.fga.api_key:
+                self._openfga.headers.update({
+                    "Authorization": f"Bearer {self.conf.fga.api_key}"
+                })
+            if self.conf.fga.http_proxy:
+                proxies = {
+                    "https": self.conf.fga.http_proxy,
+                    "http": self.conf.fga.http_proxy,
+                }
+                self._openfga.proxies.update(**proxies)
         return self._openfga
 
     def openfga_read_tuples(self, query: dict) -> ty.Iterator[dict[str, str]]:
@@ -194,9 +246,12 @@ class OpenFGA(base.AssignmentDriverBase):
         """
         try:
             request: dict = {"tuple_key": query} if query else {}
+            if self.conf.fga.model_id:
+                request["authorization_model_id"] = self.conf.fga.model_id
             response = self.fga_session.post(
                 f"{self.conf.fga.api_url}/stores/{self.conf.fga.store_id}/read",
                 json=request,
+                timeout=self.conf.fga.timeout,
             )
             if response.status_code != 200:
                 LOG.warning(
@@ -307,9 +362,12 @@ class OpenFGA(base.AssignmentDriverBase):
             raise RuntimeError(f"Mode {mode} is not supported")
         try:
             request: dict[str, ty.Any] = {mode_key: {"tuple_keys": tuples}}
+            if self.conf.fga.model_id:
+                request["authorization_model_id"] = self.conf.fga.model_id
             response = self.fga_session.post(
                 f"{self.conf.fga.api_url}/stores/{self.conf.fga.store_id}/write",
                 json=request,
+                timeout=self.conf.fga.timeout,
             )
             if response.status_code == 409:
                 raise keystone.exception.Conflict
@@ -351,9 +409,13 @@ class OpenFGA(base.AssignmentDriverBase):
     def openfga_check(self, query: dict) -> bool:
         """Perform `check` OpenFGA request"""
         try:
+            request = {"tuple_key": query}
+            if self.conf.fga.model_id:
+                request["authorization_model_id"] = self.conf.fga.model_id
             response = self.fga_session.post(
                 f"{self.conf.fga.api_url}/stores/{self.conf.fga.store_id}/check",
-                json={"tuple_key": query},
+                json=request,
+                timeout=self.conf.fga.timeout,
             )
             if response.status_code != 200:
                 LOG.warning(
@@ -388,9 +450,12 @@ class OpenFGA(base.AssignmentDriverBase):
         query: dict[str, ty.Any] = {"checks": checks}
 
         try:
+            if self.conf.fga.model_id:
+                query["authorization_model_id"] = self.conf.fga.model_id
             response = self.fga_session.post(
                 f"{self.conf.fga.api_url}/stores/{self.conf.fga.store_id}/batch-check",
                 json=query,
+                timeout=self.conf.fga.timeout,
             )
             if response.status_code != 200:
                 LOG.warning(

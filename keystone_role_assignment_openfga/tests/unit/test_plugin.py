@@ -227,12 +227,14 @@ class TestReadTuples:
 
         def match_project_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "project:"}
+                "tuple_key": {"user": "foo", "object": "project:"},
+                "authorization_model_id": "bar",
             } == request.json()
 
         def match_domain_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "domain:"}
+                "tuple_key": {"user": "foo", "object": "domain:"},
+                "authorization_model_id": "bar",
             } == request.json()
 
         mock_project = requests_mock.post(
@@ -303,12 +305,14 @@ class TestReadTuples:
 
         def match_project_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "project:"}
+                "tuple_key": {"user": "foo", "object": "project:"},
+                "authorization_model_id": "bar",
             } == request.json()
 
         def match_domain_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "domain:"}
+                "tuple_key": {"user": "foo", "object": "domain:"},
+                "authorization_model_id": "bar",
             } == request.json()
 
         mock_project = requests_mock.post(
@@ -371,7 +375,8 @@ class TestReadTuples:
                     "user": "foo",
                     "relation": "reader",
                     "object": "project:",
-                }
+                },
+                "authorization_model_id": "bar",
             } == request.json()
 
         def match_domain_request(request):
@@ -380,7 +385,8 @@ class TestReadTuples:
                     "user": "foo",
                     "relation": "reader",
                     "object": "domain:",
-                }
+                },
+                "authorization_model_id": "bar",
             } == request.json()
 
         mock_project = requests_mock.post(
@@ -442,7 +448,8 @@ class TestReadTuples:
 
         def match_request(request):
             return {
-                "tuple_key": {"user": "user:bob", "object": "project:foo"}
+                "tuple_key": {"user": "user:bob", "object": "project:foo"},
+                "authorization_model_id": "bar",
             } == request.json()
 
         mock = requests_mock.post(
@@ -586,7 +593,8 @@ class TestListAssignments:
                         },
                         "correlation_id": "manager_role_id",
                     },
-                ]
+                ],
+                "authorization_model_id": "bar",
             } == request.json()
 
         requests_mock.post(
@@ -685,7 +693,8 @@ def test_add_role_to_user_and_project(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -718,7 +727,8 @@ def test_remove_role_from_user_and_project(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -741,7 +751,8 @@ def test_create_grant(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_group_request(request):
@@ -754,7 +765,8 @@ def test_create_grant(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -783,7 +795,8 @@ def test_delete_grant(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_group_request(request):
@@ -796,7 +809,8 @@ def test_delete_grant(monkeypatch, requests_mock, config):
                         "object": "project:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -816,7 +830,10 @@ def test_delete_project_assignments(monkeypatch, requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query(request):
-        return {"tuple_key": {"object": "project:foo"}} == request.json()
+        return {
+            "tuple_key": {"object": "project:foo"},
+            "authorization_model_id": "bar",
+        } == request.json()
 
     requests_mock.post(
         "http://localhost:8080/stores/foo/read",
@@ -868,7 +885,8 @@ def test_delete_project_assignments(monkeypatch, requests_mock, config):
                         "object": "project:foo",
                     },
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -882,7 +900,10 @@ def test_delete_domain_assignments(monkeypatch, requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query(request):
-        return {"tuple_key": {"object": "domain:foo"}} == request.json()
+        return {
+            "tuple_key": {"object": "domain:foo"},
+            "authorization_model_id": "bar",
+        } == request.json()
 
     requests_mock.post(
         "http://localhost:8080/stores/foo/read",
@@ -934,7 +955,8 @@ def test_delete_domain_assignments(monkeypatch, requests_mock, config):
                         "object": "domain:foo",
                     },
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -949,17 +971,20 @@ def test_delete_user_assignments(monkeypatch, requests_mock, config):
 
     def match_query_project(request):
         return {
-            "tuple_key": {"user": "user:foo", "object": "project:"}
+            "tuple_key": {"user": "user:foo", "object": "project:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_query_domain(request):
         return {
-            "tuple_key": {"user": "user:foo", "object": "domain:"}
+            "tuple_key": {"user": "user:foo", "object": "domain:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_query_system(request):
         return {
-            "tuple_key": {"user": "user:foo", "object": "system:"}
+            "tuple_key": {"user": "user:foo", "object": "system:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1021,7 +1046,8 @@ def test_delete_user_assignments(monkeypatch, requests_mock, config):
                         "object": "project:baz",
                     },
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_change_domain(request):
@@ -1034,7 +1060,8 @@ def test_delete_user_assignments(monkeypatch, requests_mock, config):
                         "object": "domain:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1053,17 +1080,20 @@ def test_delete_group_assignments(monkeypatch, requests_mock, config):
 
     def match_query_project(request):
         return {
-            "tuple_key": {"user": "group:foo", "object": "project:"}
+            "tuple_key": {"user": "group:foo", "object": "project:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_query_domain(request):
         return {
-            "tuple_key": {"user": "group:foo", "object": "domain:"}
+            "tuple_key": {"user": "group:foo", "object": "domain:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_query_system(request):
         return {
-            "tuple_key": {"user": "group:foo", "object": "system:"}
+            "tuple_key": {"user": "group:foo", "object": "system:"},
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1125,7 +1155,8 @@ def test_delete_group_assignments(monkeypatch, requests_mock, config):
                         "object": "project:baz",
                     },
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_change_domain(request):
@@ -1138,7 +1169,8 @@ def test_delete_group_assignments(monkeypatch, requests_mock, config):
                         "object": "domain:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1165,7 +1197,8 @@ def test_create_system_grant(monkeypatch, requests_mock, config):
                         "object": "system:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_group_system_request(request):
@@ -1178,7 +1211,8 @@ def test_create_system_grant(monkeypatch, requests_mock, config):
                         "object": "system:bar",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1224,7 +1258,8 @@ def test_check_system_grant(monkeypatch, requests_mock, config):
                         "user": "group:foo",
                     }
                 },
-            ]
+            ],
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
@@ -1255,7 +1290,8 @@ def test_delete_system_grant(monkeypatch, requests_mock, config):
                         "user": "user:foo",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     def match_delete_group(request):
@@ -1268,7 +1304,8 @@ def test_delete_system_grant(monkeypatch, requests_mock, config):
                         "user": "group:foo",
                     }
                 ]
-            }
+            },
+            "authorization_model_id": "bar",
         } == request.json()
 
     requests_mock.post(
