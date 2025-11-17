@@ -31,6 +31,11 @@ openfga_opts = [
         item_type=types.String,
         help="Use SQL backend for domains in a list.",
     ),
+    cfg.DictOpt(
+        "role_to_relation_name",
+        help="Role name to the OpenFGA permission name mapping (i.e. "
+        "'member:can_become_member,reader:can_become_reader').",
+    ),
 ]
 
 

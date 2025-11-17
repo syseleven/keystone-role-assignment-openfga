@@ -98,6 +98,7 @@ jobs:
           model_id = ${model_id}
           api_key = foobarkey
           domains_using_sql_backend = ["default"]
+          role_to_relation_name = reader:can_be_reader,member:can_be_member,manager:can_be_manager,admin:can_be_admin,service:can_be_service
 
           [assignment]
           driver = ${{ matrix.backend }}
