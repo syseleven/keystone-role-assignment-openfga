@@ -173,7 +173,7 @@ class TestConvert:
             "target_id": "all",
         }
 
-    def test_convert_assignment_to_openfga_tuple(self):
+    def test_convert_assignment_to_openfga_tuple(self, config):
         assert plugin.convert_assignment_to_openfga_tuple(
             "reader", user_id="foo", project_id="bar"
         ) == {

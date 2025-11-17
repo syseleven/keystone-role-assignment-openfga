@@ -3,10 +3,10 @@ model
 
 type domain
   relations
-    define admin: [user, group#member]
-    define manager: [user, group#member] or admin
-    define member: [user, group#member] or admin or manager
-    define reader: [user, group#member] or admin or manager or member
+    define can_be_admin:   [user, group#member]
+    define can_be_manager: [user, group#member] or can_be_admin
+    define can_be_member:  [user, group#member] or can_be_admin or can_be_manager
+    define can_be_reader:  [user, group#member] or can_be_admin or can_be_manager or can_be_member
 
 type user
   relations
@@ -19,19 +19,19 @@ type group
 
 type project
   relations
-    define admin: [user, group#member]
-    define manager: [user, group#member] or admin
-    define member: [user, group#member] or admin or manager
     define owner: [domain]
-    define reader: [user, group#member] or member or admin
-    define service: [system]
+    define can_be_admin:   [user, group#member]
+    define can_be_manager: [user, group#member] or can_be_admin
+    define can_be_member:  [user, group#member] or can_be_admin or can_be_manager
+    define can_be_reader:  [user, group#member] or can_be_admin or can_be_manager or can_be_member
+    define can_be_service: [system]
 
 type system
   relations
-    define admin: [user, group#member]
-    define member: [user, group#member] or admin
-    define reader: [user, group#member] or member or admin
-    define system: [user, group#member]
+    define can_be_admin:  [user, group#member]
+    define can_be_member: [user, group#member] or can_be_admin
+    define can_be_reader: [user, group#member] or can_be_admin or can_be_member
+    define can_be_system: [user, group#member]
 
 type role
   relations

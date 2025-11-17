@@ -61,15 +61,15 @@ def convert_openfga_tuple_to_assignment_base(actor: str, target: str):
 
 
 def convert_openfga_tuple_to_assignment(
-    fga_tuple, roles_by_name
+    fga_tuple, roles_by_relation
 ) -> ty.Optional[dict[str, str]]:
     """Convert OpenFGA tuple data to the role assignment dict"""
     assignment: dict = convert_openfga_tuple_to_assignment_base(
         fga_tuple["user"], fga_tuple["object"]
     )
     fga_relation = fga_tuple["relation"]
-    if fga_relation in roles_by_name:
-        assignment["role_id"] = roles_by_name[fga_relation]
+    if fga_relation in roles_by_relation:
+        assignment["role_id"] = roles_by_relation[fga_relation]
     else:
         LOG.warning(f"Cannot identify the role for: {fga_relation}")
         return None
@@ -153,8 +153,27 @@ def convert_assignment_to_openfga_tuple(
     if target:
         fga_tuple["object"] = target
     if role_name:
-        fga_tuple["relation"] = role_name
+        fga_tuple["relation"] = get_relation_by_role_name(role_name)
     return fga_tuple
+
+
+def get_relation_by_role_name(role_name: str) -> str:
+    """Get OpenFGA permission (relation name) by the Keystone role name.
+
+    Resolve the Keystone role name to the OpenFGA relation based on the
+    `role_to_relation_name` configuration.
+    """
+    if CONF.fga.role_to_relation_name:
+        if role_name in CONF.fga.role_to_relation_name:
+            return CONF.fga.role_to_relation_name[role_name]
+        else:
+            LOG.warning(
+                f"OpenFGA permission name for the role {role_name} is "
+                "not configured in the 'fga.role_to_relation_name' "
+                "configuration variable. Using the role_name as the relation "
+                "name."
+            )
+    return role_name
 
 
 def get_session(max_retries: int = 3, reuse_session: bool = True):
@@ -198,6 +217,7 @@ class OpenFGA(base.AssignmentDriverBase):
     _openfga: requests.Session
     roles_by_name: dict[str, str] = {}
     roles_by_id: dict[str, str] = {}
+    roles_by_relation_name: dict[str, str] = {}
 
     @classmethod
     def default_role_driver(cls) -> str:
@@ -222,6 +242,15 @@ class OpenFGA(base.AssignmentDriverBase):
                 v: k for k, v in self._get_roles_by_name().items()
             }
         return self.roles_by_id
+
+    def _get_role_ids_by_relation(self) -> dict[str, str]:
+        """Get dictionary of OpenFGA relation name to the role id"""
+        if not self.roles_by_relation_name:
+            self.roles_by_relation_name = {
+                get_relation_by_role_name(x["name"]): x["id"]
+                for x in PROVIDERS.role_api.list_roles()
+            }
+        return self.roles_by_relation_name
 
     @property
     def fga_session(self):
@@ -340,12 +369,12 @@ class OpenFGA(base.AssignmentDriverBase):
             )
         else:
             openfga_tuples = list(self.openfga_read_tuples(query))
-        role_names = self._get_roles_by_name().keys()
+        relation_names = self._get_role_ids_by_relation().keys()
         for fga_tuple in openfga_tuples:
             # Filter out relations that are not roles
-            if fga_tuple["relation"] in role_names:
+            if fga_tuple["relation"] in relation_names:
                 assignment = convert_openfga_tuple_to_assignment(
-                    fga_tuple, self._get_roles_by_name()
+                    fga_tuple, self._get_role_ids_by_relation()
                 )
                 if assignment:
                     yield assignment
@@ -489,14 +518,14 @@ class OpenFGA(base.AssignmentDriverBase):
                 "tuple_key": {
                     "user": actor,
                     "object": target,
-                    "relation": role_name,
+                    "relation": get_relation_by_role_name(role_name),
                 },
                 "correlation_id": role_id,
             })
 
         check_results = self.openfga_batch_check(checks)
 
-        for role_name, role_id in self._get_roles_by_name().items():
+        for role_id in self._get_roles_by_id().keys():
             role_result = check_results.get(role_id, None)
             if role_result:
                 if role_result.get("allowed", False):
@@ -633,7 +662,7 @@ class OpenFGA(base.AssignmentDriverBase):
         if actor:
             fga_check_request["user"] = actor
 
-        relation = PROVIDERS.role_api.get_role(role_id)["name"]
+        relation = get_relation_by_role_name(self._get_roles_by_id()[role_id])
         if relation:
             fga_check_request["relation"] = relation
 
@@ -714,9 +743,9 @@ class OpenFGA(base.AssignmentDriverBase):
 
         if role_id and (target or actor):
             # Filter to the specific relation (role)
-            fga_read_tuples_request["relation"] = PROVIDERS.role_api.get_role(
-                role_id
-            )["name"]
+            fga_read_tuples_request["relation"] = get_relation_by_role_name(
+                PROVIDERS.role_api.get_role(role_id)["name"]
+            )
 
         assignments: list[dict[str, str]] = []
         if actor and target and not role_id:
@@ -917,7 +946,7 @@ class OpenFGA(base.AssignmentDriverBase):
 
         """
         fga_checks: list[dict[str, str]] = []
-        relation = self._get_roles_by_id()[role_id]
+        relation = get_relation_by_role_name(self._get_roles_by_id()[role_id])
         # Actor may be user
         fga_checks.append({
             "tuple_key": {
@@ -951,7 +980,7 @@ class OpenFGA(base.AssignmentDriverBase):
             not
 
         """
-        relation = self._get_roles_by_id()[role_id]
+        relation = get_relation_by_role_name(self._get_roles_by_id()[role_id])
         # Try to delete relation for user and then group. If none found (both
         # return 400 as not found) raise RoleAssignmentNotFound
         for actor in [f"user:{actor_id}", f"group:{actor_id}"]:
