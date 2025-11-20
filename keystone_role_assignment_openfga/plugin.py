@@ -259,7 +259,7 @@ class OpenFGA(base.AssignmentDriverBase):
             if self.conf.fga.api_key:
                 self._openfga.headers.update({
                     "Authorization": f"Bearer {self.conf.fga.api_key}",
-                    "User-Agent": "keystone-role-assignment-openfga"
+                    "User-Agent": "keystone-role-assignment-openfga",
                 })
             if self.conf.fga.http_proxy:
                 proxies = {
