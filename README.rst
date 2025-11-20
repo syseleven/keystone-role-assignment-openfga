@@ -84,11 +84,11 @@ Additional considerations
    triplets (actor-role-object).
 
 3. Keystone and OpenFGA both have methods of inheriting/inferring roles through
-   role inferrence, group membership, domain to project delegation and so on.
+   role inference, group membership, domain to project delegation and so on.
    Currently Keystone does not support delegating such decisions to the backend
    and instead reimplements it internally. This has an effect that when certain
    role is granted between assignee and the object it is not possible to learn
    how is this achieved (as a direct assignment of through inheritance). It is
-   strongly advised to keep role inferrence and user/group relations in sync
+   strongly advised to keep role inference and user/group relations in sync
    between Keystone and OpenFGA to reduce confusion.
 
