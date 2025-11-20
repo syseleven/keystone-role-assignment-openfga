@@ -167,7 +167,7 @@ def get_relation_by_role_name(role_name: str) -> str:
         if role_name in CONF.fga.role_to_relation_name:
             return CONF.fga.role_to_relation_name[role_name]
         else:
-            LOG.warning(
+            LOG.debug(
                 f"OpenFGA permission name for the role {role_name} is "
                 "not configured in the 'fga.role_to_relation_name' "
                 "configuration variable. Using the role_name as the relation "
