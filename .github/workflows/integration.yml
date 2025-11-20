@@ -97,7 +97,7 @@ jobs:
           store_id = ${store_id}
           model_id = ${model_id}
           api_key = foobarkey
-          domains_using_sql_backend = ["default"]
+          domains_using_sql_backend = default
           role_to_relation_name = reader:can_be_reader,member:can_be_member,manager:can_be_manager,admin:can_be_admin,service:can_be_service
 
           [assignment]
@@ -147,9 +147,9 @@ jobs:
         run: uv run pytest keystone_role_assignment_openfga/tests/functional
 
       - name: Dump python keystone log
-        if: failure()
+        if: always()
         run: cat python.log
 
       - name: Dump fga log
-        if: failure()
+        if: always()
         run: cat fga.log

@@ -28,7 +28,7 @@ openfga_opts = [
     cfg.BoolOpt("verify", default=True, help="Verify SSL certificate."),
     cfg.ListOpt(
         "domains_using_sql_backend",
-        item_type=types.String,
+        item_type=str,
         help="Use SQL backend for domains in a list.",
     ),
     cfg.DictOpt(

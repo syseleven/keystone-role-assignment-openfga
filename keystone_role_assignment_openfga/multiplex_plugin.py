@@ -55,12 +55,17 @@ class OpenFGASqlMultiplex(base.AssignmentDriverBase):
         use_sql = False
         if user_id:
             user = PROVIDERS.identity_api.get_user(user_id)
-            LOG.debug(f"User {user_id}: {user}")
+            LOG.debug(
+                f"User {user_id}: {user}"
+            )
             if (
                 user.get("domain_id")
                 in self.conf.fga.domains_using_sql_backend
             ):
                 use_sql = True
+            LOG.debug(
+                f"User {user_id}: {user} -> {use_sql}"
+            )
         elif group_id:
             group = PROVIDERS.identity_api.get_group(group_id)
             if (
@@ -414,7 +419,7 @@ class OpenFGASqlMultiplex(base.AssignmentDriverBase):
                 actor_id, target_id, assignment_type
             )
         else:
-            return self.sql.create_system_grant(
+            return self.sql.list_system_grants(
                 actor_id, target_id, assignment_type
             )
 

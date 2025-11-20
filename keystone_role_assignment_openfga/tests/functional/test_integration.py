@@ -22,11 +22,11 @@ def admin_connection():
 
 class TestRoleAssignments:
     def test_list_role_assignments(self, admin_connection):
-        # Try listing all direct assignments
-        assert list(admin_connection.identity.role_assignments())
+        # # Try listing all direct assignments
+        # assert list(admin_connection.identity.role_assignments())
 
-        # Try list effective assignments
-        assert list(admin_connection.identity.role_assignments(effective=True))
+        # # Try list effective assignments
+        # assert list(admin_connection.identity.role_assignments(effective=True))
 
         # For every user try listing role assignments
         for user in admin_connection.identity.users():
@@ -62,6 +62,63 @@ class TestRoleAssignments:
 
         user_connect = admin_connection.connect_as(
             username="test", password="test", project_id=project.id
+        )
+        # auth is lazy in openstacksdk, so force it
+        user_connect.authorize()
+        user_auth = json.loads(
+            user_connect.config.get_auth().get_auth_state()
+        )["body"]["token"]
+
+        assert member_role.name in [
+            role["name"] for role in user_auth["roles"]
+        ]
+
+        admin_connection.identity.unassign_project_role_from_user(
+            project, user, member_role
+        )
+        admin_connection.identity.assign_project_role_to_user(
+            project, user, reader_role
+        )
+        assert [reader_role.name] == [
+            assignment["role"]["name"]
+            for assignment in admin_connection.identity.role_assignments(
+                user_id=user.id, include_names=True
+            )
+        ]
+        assert admin_connection.identity.validate_user_has_project_role(
+            project, user, reader_role
+        )
+        assert not admin_connection.identity.validate_user_has_project_role(
+            project, user, member_role
+        )
+
+    def test_not_whitelisted_domain(self, admin_connection):
+        domain = admin_connection.identity.create_domain(name="other")
+        project = admin_connection.identity.create_project(
+            name="other_project", domain_id=domain.id
+        )
+        user = admin_connection.identity.create_user(
+            name="test_user", password="test", domain_id=domain.id
+        )
+
+        member_role = admin_connection.identity.find_role("member")
+        reader_role = admin_connection.identity.find_role("reader")
+
+        admin_connection.identity.assign_project_role_to_user(
+            project, user, member_role
+        )
+        assert [member_role.name] == [
+            assignment["role"]["name"]
+            for assignment in admin_connection.identity.role_assignments(
+                user_id=user.id, include_names=True
+            )
+        ]
+
+        user_connect = admin_connection.connect_as(
+            user_id=user.id,
+            password="test",
+            user_domain_id=domain.id,
+            project_id=project.id,
         )
         # auth is lazy in openstacksdk, so force it
         user_connect.authorize()

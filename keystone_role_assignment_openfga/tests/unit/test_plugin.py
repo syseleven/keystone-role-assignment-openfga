@@ -15,10 +15,13 @@ import logging
 import pytest
 from keystone import exception
 from keystone.common import provider_api
+
+# from keystone.identity
 from oslo_config import cfg
 
 from keystone_role_assignment_openfga import config as plugin_config
 from keystone_role_assignment_openfga import plugin
+from keystone_role_assignment_openfga import multiplex_plugin
 
 LOG = logging.getLogger(__name__)
 
@@ -1325,3 +1328,55 @@ def test_delete_system_grant(monkeypatch, requests_mock, config):
     )
     with pytest.raises(exception.RoleAssignmentNotFound):
         driver.delete_system_grant("reader_role_id", "foo", "bar", False)
+
+
+@pytest.fixture
+def multiplex_config():
+    plugin_config.register_opts(cfg.CONF)
+    cfg.CONF.set_override("domains_using_sql_backend", "a,b,c", group="fga")
+    return cfg
+
+
+class TestMultiplex:
+    def test_sql_for_user_whitelisted(
+        self, mocker, monkeypatch, multiplex_config
+    ):
+        driver = multiplex_plugin.OpenFGASqlMultiplex()
+        provider_api = mocker.MagicMock()
+        get_mock = mocker.MagicMock()
+        get_mock.side_effect = (
+            lambda id: {"domain_id": "a"}
+            if id == "foo"
+            else {"domain_id": "other"}
+        )
+        provider_api.identity_api = mocker.MagicMock()
+        provider_api.identity_api.get_user = get_mock
+        monkeypatch.setattr(multiplex_plugin, "PROVIDERS", provider_api)
+        assert driver.should_use_sql_backend(user_id="foo")
+        assert not driver.should_use_sql_backend(user_id="bar")
+
+    def test_sql_for_project(self, mocker, monkeypatch, multiplex_config):
+        driver = multiplex_plugin.OpenFGASqlMultiplex()
+        provider_api = mocker.MagicMock()
+        get_mock = mocker.MagicMock()
+        get_mock.side_effect = (
+            lambda id: {"domain_id": "a"}
+            if id == "foo"
+            else {"domain_id": "other"}
+        )
+        provider_api.resource_api = mocker.MagicMock()
+        provider_api.resource_api.get_project = get_mock
+        monkeypatch.setattr(multiplex_plugin, "PROVIDERS", provider_api)
+        assert driver.should_use_sql_backend(project_id="foo")
+        assert not driver.should_use_sql_backend(project_id="bar")
+
+    def test_sql_for_domain(self, mocker, monkeypatch, multiplex_config):
+        driver = multiplex_plugin.OpenFGASqlMultiplex()
+        assert driver.should_use_sql_backend(domain_id="a")
+        assert driver.should_use_sql_backend(domain_id="b")
+        assert driver.should_use_sql_backend(domain_id="c")
+        assert not driver.should_use_sql_backend(domain_id="other")
+
+    def test_sql_default(self, mocker, monkeypatch, multiplex_config):
+        driver = multiplex_plugin.OpenFGASqlMultiplex()
+        assert not driver.should_use_sql_backend()
