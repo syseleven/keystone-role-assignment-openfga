@@ -41,7 +41,7 @@ jobs:
       OPENFGA_PLAYGROUND_ENABLED: "false"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6.0.0
 
       - name: Install OpenFGA server
         uses: jaxxstorm/action-install-gh-release@v2.1.0
