@@ -626,7 +626,7 @@ wheels = [
 
 [[package]]
 name = "keystone-role-assignment-openfga"
-version = "0.1.2.dev18"
+version = "0.1.2.dev21"
 source = { editable = "." }
 dependencies = [
     { name = "keystone" },

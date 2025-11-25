@@ -10,18 +10,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-
 import logging
+
 import pytest
 from keystone import exception
 from keystone.common import provider_api
+from keystone.identity.mapping_backends import mapping as identity_mapping
 
-# from keystone.identity
 from oslo_config import cfg
 
 from keystone_role_assignment_openfga import config as plugin_config
-from keystone_role_assignment_openfga import plugin
-from keystone_role_assignment_openfga import multiplex_plugin
+from keystone_role_assignment_openfga import multiplex_plugin, plugin
 
 LOG = logging.getLogger(__name__)
 
@@ -39,7 +38,41 @@ class RoleApiMock:
         return ROLES
 
 
+class IdentityApiMock:
+    def get_user(*args, **kwargs):
+        user: dict[str, str] = {"name": "dummy"}
+        if args[0] == "foo":
+            user["domain_id"] = "a"
+        else:
+            user["domain_id"] = "other"
+        return user
+
+
+class IdMappingApiMock:
+    def get_id_mapping(public_id):
+        if public_id.startswith("user"):
+            return {
+                "local_id": public_id[5:],
+                "local_domain": "domain_id",
+                "entity_type": identity_mapping.EntityType.USER,
+            }
+        elif public_id.startswith("group"):
+            return {
+                "local_id": public_id[6:],
+                "local_domain": "domain_id",
+                "entity_type": identity_mapping.EntityType.GROUP,
+            }
+
+    def get_public_id(local_entity):
+        if local_entity["entity_type"] == identity_mapping.EntityType.USER:
+            return f"user:{local_entity['local_id']}"
+        elif local_entity["entity_type"] == identity_mapping.EntityType.GROUP:
+            return f"group:{local_entity['local_id']}"
+
+
 PROVIDERS._register_provider_api("role_api", RoleApiMock)
+PROVIDERS._register_provider_api("identity_api", IdentityApiMock)
+PROVIDERS._register_provider_api("id_mapping_api", IdMappingApiMock)
 
 
 @pytest.fixture
@@ -49,7 +82,7 @@ def config():
     cfg.CONF.set_override("store_id", "foo", group="fga")
     cfg.CONF.set_override("model_id", "bar", group="fga")
     cfg.CONF.set_override("verify", False, group="fga")
-    return cfg
+    yield cfg
 
 
 class TestConvert:
@@ -230,13 +263,13 @@ class TestReadTuples:
 
         def match_project_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "project:"},
+                "tuple_key": {"user": "user:foo", "object": "project:"},
                 "authorization_model_id": "bar",
             } == request.json()
 
         def match_domain_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "domain:"},
+                "tuple_key": {"user": "user:foo", "object": "domain:"},
                 "authorization_model_id": "bar",
             } == request.json()
 
@@ -247,14 +280,14 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "reader",
                             "object": "project:foo",
                         }
                     },
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "unsupported",
                             "object": "project:bar",
                         }
@@ -269,14 +302,14 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "manager",
                             "object": "domain:bar",
                         }
                     },
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "unsupported",
                             "object": "domain:bar",
                         }
@@ -285,18 +318,20 @@ class TestReadTuples:
             },
         )
 
-        assignments = list(driver.openfga_read_assignments({"user": "foo"}))
+        assignments = list(
+            driver.openfga_read_assignments({"user": "user:foo"})
+        )
         assert mock_project.called
         assert mock_domain.called
         assert [
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "reader_role_id",
                 "target_id": "foo",
                 "type": "UserProject",
             },
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "manager_role_id",
                 "target_id": "bar",
                 "type": "UserDomain",
@@ -308,13 +343,13 @@ class TestReadTuples:
 
         def match_project_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "project:"},
+                "tuple_key": {"user": "user:foo", "object": "project:"},
                 "authorization_model_id": "bar",
             } == request.json()
 
         def match_domain_request(request):
             return {
-                "tuple_key": {"user": "foo", "object": "domain:"},
+                "tuple_key": {"user": "user:foo", "object": "domain:"},
                 "authorization_model_id": "bar",
             } == request.json()
 
@@ -325,7 +360,7 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "reader",
                             "object": "project:foo",
                         }
@@ -340,7 +375,7 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "manager",
                             "object": "domain:bar",
                         }
@@ -349,18 +384,20 @@ class TestReadTuples:
             },
         )
 
-        assignments = list(driver.openfga_read_assignments({"user": "foo"}))
+        assignments = list(
+            driver.openfga_read_assignments({"user": "user:foo"})
+        )
         assert mock_project.called
         assert mock_domain.called
         assert [
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "reader_role_id",
                 "target_id": "foo",
                 "type": "UserProject",
             },
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "manager_role_id",
                 "target_id": "bar",
                 "type": "UserDomain",
@@ -375,7 +412,7 @@ class TestReadTuples:
         def match_project_request(request):
             return {
                 "tuple_key": {
-                    "user": "foo",
+                    "user": "user:foo",
                     "relation": "reader",
                     "object": "project:",
                 },
@@ -385,7 +422,7 @@ class TestReadTuples:
         def match_domain_request(request):
             return {
                 "tuple_key": {
-                    "user": "foo",
+                    "user": "user:foo",
                     "relation": "reader",
                     "object": "domain:",
                 },
@@ -399,7 +436,7 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "reader",
                             "object": "project:foo",
                         }
@@ -414,7 +451,7 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "reader",
                             "object": "domain:bar",
                         }
@@ -425,7 +462,7 @@ class TestReadTuples:
 
         assignments = list(
             driver.openfga_read_assignments({
-                "user": "foo",
+                "user": "user:foo",
                 "relation": "reader",
             })
         )
@@ -433,13 +470,13 @@ class TestReadTuples:
         assert mock_domain.called
         assert [
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "reader_role_id",
                 "target_id": "foo",
                 "type": "UserProject",
             },
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "reader_role_id",
                 "target_id": "bar",
                 "type": "UserDomain",
@@ -451,7 +488,7 @@ class TestReadTuples:
 
         def match_request(request):
             return {
-                "tuple_key": {"user": "user:bob", "object": "project:foo"},
+                "tuple_key": {"user": "user:foo", "object": "project:foo"},
                 "authorization_model_id": "bar",
             } == request.json()
 
@@ -462,7 +499,7 @@ class TestReadTuples:
                 "tuples": [
                     {
                         "key": {
-                            "user": "user:bob",
+                            "user": "user:foo",
                             "relation": "reader",
                             "object": "project:foo",
                         }
@@ -473,14 +510,14 @@ class TestReadTuples:
 
         assignments = list(
             driver.openfga_read_assignments({
-                "user": "user:bob",
+                "user": "user:foo",
                 "object": "project:foo",
             })
         )
         assert mock.called
         assert [
             {
-                "actor_id": "bob",
+                "actor_id": "foo",
                 "role_id": "reader_role_id",
                 "target_id": "foo",
                 "type": "UserProject",
@@ -521,7 +558,7 @@ class TestListAssignments:
         res = driver.list_role_assignments()
         assert res == []
 
-    def test_list_role_assignments(self, monkeypatch, requests_mock, config):
+    def test_list_role_assignments(self, requests_mock, config):
         driver = plugin.OpenFGA()
 
         requests_mock.post(
@@ -572,9 +609,7 @@ class TestListAssignments:
             },
         ]
 
-    def test_list_role_assignments_actor_target(
-        self, monkeypatch, requests_mock, config
-    ):
+    def test_list_role_assignments_actor_target(self, requests_mock, config):
         driver = plugin.OpenFGA()
 
         def match_batch_request(request):
@@ -654,9 +689,7 @@ class TestListAssignments:
             },
         ]
 
-    def test_list_role_assignments_bad_response(
-        self, monkeypatch, requests_mock, config
-    ):
+    def test_list_role_assignments_bad_response(self, requests_mock, config):
         driver = plugin.OpenFGA()
 
         requests_mock.post(
@@ -683,7 +716,7 @@ class TestListAssignments:
         assert res == []
 
 
-def test_add_role_to_user_and_project(monkeypatch, requests_mock, config):
+def test_add_role_to_user_and_project(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_request(request):
@@ -707,7 +740,7 @@ def test_add_role_to_user_and_project(monkeypatch, requests_mock, config):
     driver.add_role_to_user_and_project("foo", "bar", "reader_role_id")
 
 
-def test_add_role_to_user_and_project_409(monkeypatch, requests_mock, config):
+def test_add_role_to_user_and_project_409(requests_mock, config):
     driver = plugin.OpenFGA()
 
     requests_mock.post(
@@ -717,7 +750,7 @@ def test_add_role_to_user_and_project_409(monkeypatch, requests_mock, config):
         driver.add_role_to_user_and_project("foo", "bar", "reader_role_id")
 
 
-def test_remove_role_from_user_and_project(monkeypatch, requests_mock, config):
+def test_remove_role_from_user_and_project(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_request(request):
@@ -741,7 +774,7 @@ def test_remove_role_from_user_and_project(monkeypatch, requests_mock, config):
     driver.remove_role_from_user_and_project("foo", "bar", "reader_role_id")
 
 
-def test_create_grant(monkeypatch, requests_mock, config):
+def test_create_grant(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_user_request(request):
@@ -785,7 +818,7 @@ def test_create_grant(monkeypatch, requests_mock, config):
     driver.create_grant("reader_role_id", group_id="foo", project_id="bar")
 
 
-def test_delete_grant(monkeypatch, requests_mock, config):
+def test_delete_grant(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_user_request(request):
@@ -829,7 +862,7 @@ def test_delete_grant(monkeypatch, requests_mock, config):
     driver.delete_grant("reader_role_id", group_id="foo", project_id="bar")
 
 
-def test_delete_project_assignments(monkeypatch, requests_mock, config):
+def test_delete_project_assignments(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query(request):
@@ -899,7 +932,7 @@ def test_delete_project_assignments(monkeypatch, requests_mock, config):
     driver.delete_project_assignments("foo")
 
 
-def test_delete_domain_assignments(monkeypatch, requests_mock, config):
+def test_delete_domain_assignments(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query(request):
@@ -969,7 +1002,7 @@ def test_delete_domain_assignments(monkeypatch, requests_mock, config):
     driver.delete_domain_assignments("foo")
 
 
-def test_delete_user_assignments(monkeypatch, requests_mock, config):
+def test_delete_user_assignments(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query_project(request):
@@ -1078,7 +1111,7 @@ def test_delete_user_assignments(monkeypatch, requests_mock, config):
     driver.delete_user_assignments("foo")
 
 
-def test_delete_group_assignments(monkeypatch, requests_mock, config):
+def test_delete_group_assignments(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_query_project(request):
@@ -1187,7 +1220,7 @@ def test_delete_group_assignments(monkeypatch, requests_mock, config):
     driver.delete_group_assignments("foo")
 
 
-def test_create_system_grant(monkeypatch, requests_mock, config):
+def test_create_system_grant(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_user_system_request(request):
@@ -1241,7 +1274,7 @@ def test_create_system_grant(monkeypatch, requests_mock, config):
     )
 
 
-def test_check_system_grant(monkeypatch, requests_mock, config):
+def test_check_system_grant(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_batch_request(request):
@@ -1280,7 +1313,7 @@ def test_check_system_grant(monkeypatch, requests_mock, config):
     assert not driver.check_system_grant("reader_role_id", "foo", "bar", False)
 
 
-def test_delete_system_grant(monkeypatch, requests_mock, config):
+def test_delete_system_grant(requests_mock, config):
     driver = plugin.OpenFGA()
 
     def match_delete_user(request):
@@ -1338,20 +1371,8 @@ def multiplex_config():
 
 
 class TestMultiplex:
-    def test_sql_for_user_whitelisted(
-        self, mocker, monkeypatch, multiplex_config
-    ):
+    def test_sql_for_user_whitelisted(self, multiplex_config):
         driver = multiplex_plugin.OpenFGASqlMultiplex()
-        provider_api = mocker.MagicMock()
-        get_mock = mocker.MagicMock()
-        get_mock.side_effect = (
-            lambda id: {"domain_id": "a"}
-            if id == "foo"
-            else {"domain_id": "other"}
-        )
-        provider_api.identity_api = mocker.MagicMock()
-        provider_api.identity_api.get_user = get_mock
-        monkeypatch.setattr(multiplex_plugin, "PROVIDERS", provider_api)
         assert driver.should_use_sql_backend(user_id="foo")
         assert not driver.should_use_sql_backend(user_id="bar")
 
@@ -1370,13 +1391,13 @@ class TestMultiplex:
         assert driver.should_use_sql_backend(project_id="foo")
         assert not driver.should_use_sql_backend(project_id="bar")
 
-    def test_sql_for_domain(self, mocker, monkeypatch, multiplex_config):
+    def test_sql_for_domain(self, multiplex_config):
         driver = multiplex_plugin.OpenFGASqlMultiplex()
         assert driver.should_use_sql_backend(domain_id="a")
         assert driver.should_use_sql_backend(domain_id="b")
         assert driver.should_use_sql_backend(domain_id="c")
         assert not driver.should_use_sql_backend(domain_id="other")
 
-    def test_sql_default(self, mocker, monkeypatch, multiplex_config):
+    def test_sql_default(self, multiplex_config):
         driver = multiplex_plugin.OpenFGASqlMultiplex()
         assert not driver.should_use_sql_backend()
