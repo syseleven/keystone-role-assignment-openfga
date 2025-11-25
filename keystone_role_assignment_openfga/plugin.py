@@ -10,20 +10,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import typing as ty
 import threading
-
-import oslo_config
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import typing as ty
 
 import keystone.conf
+import requests
 from keystone import exception
 from keystone.assignment.backends import base
-from keystone.identity.mapping_backends import mapping as identity_mapping
 from keystone.common import provider_api
+from keystone.identity.mapping_backends import mapping as identity_mapping
+from oslo_config.cfg import ConfigOpts
 from oslo_log import log
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from keystone_role_assignment_openfga import config
 
@@ -239,7 +238,7 @@ def get_openfga_user_identifier(keystone_user_id: str) -> str:
 
 
 class OpenFGA(base.AssignmentDriverBase):
-    conf: oslo_config.cfg.ConfigOpts
+    conf: ConfigOpts
     _openfga: requests.Session
     roles_by_name: dict[str, str] = {}
     roles_by_id: dict[str, str] = {}
@@ -335,7 +334,7 @@ class OpenFGA(base.AssignmentDriverBase):
             raise
 
     def openfga_read_assignments(
-        self, query: dict
+        self, query: dict[str, str]
     ) -> ty.Iterator[dict[str, str]]:
         """Perform `read tuples` OpenFGA request and convert results to Keystone assignment triplets
 
@@ -426,7 +425,7 @@ class OpenFGA(base.AssignmentDriverBase):
                 timeout=self.conf.fga.timeout,
             )
             if response.status_code == 409:
-                raise keystone.exception.Conflict
+                raise exception.Conflict
             elif response.status_code == 400 and mode_key == "deletes":
                 raise exception.RoleAssignmentNotFound(
                     role_id=tuples[0]["relation"],
@@ -650,8 +649,8 @@ class OpenFGA(base.AssignmentDriverBase):
         if actor:
             fga_read_tuples_request["user"] = actor
 
-        assignments: list[dict] = self.openfga_read_assignments(
-            fga_read_tuples_request
+        assignments: list[dict[str, str]] = list(
+            self.openfga_read_assignments(fga_read_tuples_request)
         )
         return [x["role_id"] for x in assignments]
 
@@ -968,7 +967,7 @@ class OpenFGA(base.AssignmentDriverBase):
             not
 
         """
-        fga_checks: list[dict[str, str]] = []
+        fga_checks: list[dict[str, dict[str, str]]] = []
         relation = get_relation_by_role_name(self._get_roles_by_id()[role_id])
         # Actor may be user
         fga_checks.append({

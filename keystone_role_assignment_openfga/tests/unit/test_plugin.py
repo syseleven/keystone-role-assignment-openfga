@@ -14,15 +14,21 @@ import logging
 
 import pytest
 from keystone import exception
+import keystone.conf
 from keystone.common import provider_api
+from keystone.common import cache
 from keystone.identity.mapping_backends import mapping as identity_mapping
 
 from oslo_config import cfg
+
+keystone.conf.configure()
+cache.configure_invalidation_region()
 
 from keystone_role_assignment_openfga import config as plugin_config
 from keystone_role_assignment_openfga import multiplex_plugin, plugin
 
 LOG = logging.getLogger(__name__)
+CONF = keystone.conf.CONF
 
 PROVIDERS = provider_api.ProviderAPIs
 ROLES = [
@@ -31,6 +37,8 @@ ROLES = [
 ]
 ROLES_BY_NAME: dict[str, str] = {x["name"]: x["id"] for x in ROLES}
 ROLES_BY_ID: dict[str, str] = {x["id"]: x["name"] for x in ROLES}
+
+plugin_config.register_opts(CONF)
 
 
 class RoleApiMock:
@@ -77,12 +85,12 @@ PROVIDERS._register_provider_api("id_mapping_api", IdMappingApiMock)
 
 @pytest.fixture
 def config():
-    plugin_config.register_opts(cfg.CONF)
-    cfg.CONF.set_override("api_url", "http://localhost:8080", group="fga")
-    cfg.CONF.set_override("store_id", "foo", group="fga")
-    cfg.CONF.set_override("model_id", "bar", group="fga")
-    cfg.CONF.set_override("verify", False, group="fga")
-    yield cfg
+    plugin_config.register_opts(CONF)
+    CONF.set_override("api_url", "http://localhost:8080", group="fga")
+    CONF.set_override("store_id", "foo", group="fga")
+    CONF.set_override("model_id", "bar", group="fga")
+    CONF.set_override("verify", False, group="fga")
+    yield CONF
 
 
 class TestConvert:
@@ -1365,9 +1373,9 @@ def test_delete_system_grant(requests_mock, config):
 
 @pytest.fixture
 def multiplex_config():
-    plugin_config.register_opts(cfg.CONF)
-    cfg.CONF.set_override("domains_using_sql_backend", "a,b,c", group="fga")
-    return cfg
+    plugin_config.register_opts(CONF)
+    CONF.set_override("domains_using_sql_backend", "a,b,c", group="fga")
+    yield CONF
 
 
 class TestMultiplex:

@@ -10,6 +10,7 @@ requires-python = ">=3.9,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
   "keystone>=24.0",
+  "oslo.cache",
   "oslo.config",
   "oslo.log",
   "requests"
@@ -73,3 +74,8 @@ preview = true
 log_level = "debug"
 log_cli = true
 log_cli_level = "debug"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+reportMissingImports = "warning"

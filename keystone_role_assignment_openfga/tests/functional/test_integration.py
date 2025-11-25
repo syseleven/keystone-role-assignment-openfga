@@ -11,8 +11,10 @@
 # under the License.
 
 import json
+import os
 import openstack
 import pytest
+import requests
 
 
 @pytest.fixture
@@ -101,6 +103,7 @@ class TestRoleAssignments:
             name="test_user", password="test", domain_id=domain.id
         )
 
+        manager_role = admin_connection.identity.find_role("manager")
         member_role = admin_connection.identity.find_role("member")
         reader_role = admin_connection.identity.find_role("reader")
 
@@ -147,4 +150,26 @@ class TestRoleAssignments:
         )
         assert not admin_connection.identity.validate_user_has_project_role(
             project, user, member_role
+        )
+
+        # Assign role directly in OpenFGA and verify it is present on Keystone
+        # (caching).
+        requests.post(
+            f"http://localhost:8080/stores/{os.getenv('OPENFGA_STORE_ID')}/write",
+            headers={"Authorization": f"Bearer {os.getenv('FGA_API_TOKEN')}"},
+            json={
+                "writes": {
+                    "tuple_keys": [
+                        {
+                            "user": f"user:{user.id}",
+                            "relation": "can_be_manager",
+                            "object": f"project:{project.id}",
+                        }
+                    ]
+                }
+            },
+        )
+
+        assert admin_connection.identity.validate_user_has_project_role(
+            project, user, manager_role
         )

@@ -92,3 +92,9 @@ Additional considerations
    strongly advised to keep role inference and user/group relations in sync
    between Keystone and OpenFGA to reduce confusion.
 
+4. Keystone uses aggressive caching on the provider level. Due to that the
+   driver code might not be even invoked. This contradicts the approach of this
+   project making role assignments managed in the external system. As such it is
+   necessary to disable assignments caching in Keystone (`[role].caching =
+   false`). `OpenFGASqlMultiplex:should_use_sql_backend` method is cached (it is
+   not

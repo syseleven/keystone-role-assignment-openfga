@@ -626,10 +626,11 @@ wheels = [
 
 [[package]]
 name = "keystone-role-assignment-openfga"
-version = "0.1.2.dev21"
+version = "0.1.2.dev24"
 source = { editable = "." }
 dependencies = [
     { name = "keystone" },
+    { name = "oslo-cache" },
     { name = "oslo-config" },
     { name = "oslo-log" },
     { name = "requests" },
@@ -646,6 +647,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "keystone", specifier = ">=24.0" },
+    { name = "oslo-cache" },
     { name = "oslo-config" },
     { name = "oslo-log" },
     { name = "requests" },
