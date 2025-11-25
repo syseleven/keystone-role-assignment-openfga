@@ -21,6 +21,7 @@ from urllib3.util.retry import Retry
 import keystone.conf
 from keystone import exception
 from keystone.assignment.backends import base
+from keystone.identity.mapping_backends import mapping as identity_mapping
 from keystone.common import provider_api
 from oslo_log import log
 
@@ -38,14 +39,19 @@ def convert_openfga_tuple_to_assignment_base(actor: str, target: str):
     """Convert actor and target to the assignment dict."""
     assignment: dict[str, str] = {}
     type_prefix: str = ""
-    if actor.startswith("user"):
-        assignment["actor_id"] = actor[5:]
-        type_prefix = "User"
-    elif actor.startswith("group"):
-        assignment["actor_id"] = actor[6:]
-        type_prefix = "Group"
+    local_ref = PROVIDERS.id_mapping_api.get_id_mapping(actor)
+    if local_ref:
+        type_prefix = str(local_ref["entity_type"]).capitalize()
+        assignment["actor_id"] = local_ref["local_id"]
     else:
-        raise RuntimeError(f"Actor {actor} is not supported")
+        if actor.startswith("user"):
+            assignment["actor_id"] = actor[5:]
+            type_prefix = "User"
+        elif actor.startswith("group"):
+            assignment["actor_id"] = actor[6:]
+            type_prefix = "Group"
+        else:
+            raise RuntimeError(f"Actor {actor} is not supported")
     if target.startswith("project"):
         assignment["target_id"] = target[8:]
         assignment["type"] = f"{type_prefix}Project"
@@ -105,7 +111,7 @@ def convert_assignment_actor_to_fga_user(
     allow_none: bool = False,
 ) -> ty.Optional[str]:
     if user_id:
-        return f"user:{user_id}"
+        return get_openfga_user_identifier(user_id)
     elif group_id:
         return f"group:{group_id}"
     elif not allow_none:
@@ -210,6 +216,26 @@ def get_session(max_retries: int = 3, reuse_session: bool = True):
         return _session
     else:
         return _new_session()
+
+
+def get_openfga_user_identifier(keystone_user_id: str) -> str:
+    """
+    Convert Keystone user_id to the OpenFGA actor_id using the ID mapping
+    provider.
+
+    Lookup the ID mapping provider to identify OpenFGA actor for the local
+    user_id. Otherwise apply the regular conversion: "user:{keystone_user_id}"
+    """
+    user = PROVIDERS.identity_api.get_user(keystone_user_id)
+    remote_id = PROVIDERS.id_mapping_api.get_public_id({
+        "local_id": keystone_user_id,
+        "domain_id": user["domain_id"],
+        "entity_type": identity_mapping.EntityType.USER,
+    })
+    if remote_id:
+        return remote_id
+    else:
+        return f"user:{keystone_user_id}"
 
 
 class OpenFGA(base.AssignmentDriverBase):
@@ -729,16 +755,18 @@ class OpenFGA(base.AssignmentDriverBase):
             fga_read_tuples_request["object"] = target
 
         if user_id:
-            fga_read_tuples_request["user"] = f"user:{user_id}"
-            actor = f"user:{user_id}"
+            remote_id = convert_assignment_actor_to_fga_user(user_id=user_id)
+            if remote_id:
+                actor = remote_id
+                fga_read_tuples_request["user"] = actor
         elif group_ids:
             if len(group_ids) > 1:
                 raise exception.NotImplemented(
                     "Listing role assignments for multiple group_ids is not"
                     " implemented"
                 )  # pragma: no cover
-            fga_read_tuples_request["user"] = f"group:{group_ids[0]}"
             actor = f"group:{group_ids[0]}"
+            fga_read_tuples_request["user"] = actor
         if actor:
             fga_read_tuples_request["user"] = actor
 
@@ -801,29 +829,21 @@ class OpenFGA(base.AssignmentDriverBase):
 
         """
         # tuples for user access on all projects
+        actor = get_openfga_user_identifier(user_id)
         project_tuples = list(
-            self.openfga_read_tuples({
-                "user": f"user:{user_id}",
-                "object": "project:",
-            })
+            self.openfga_read_tuples({"user": actor, "object": "project:"})
         )
         self.openfga_remove_tuples(project_tuples)
 
         # tuples for user access on all domains
         domain_tuples = list(
-            self.openfga_read_tuples({
-                "user": f"user:{user_id}",
-                "object": "domain:",
-            })
+            self.openfga_read_tuples({"user": actor, "object": "domain:"})
         )
         self.openfga_remove_tuples(domain_tuples)
 
         # tuples for user access on all systems
         system_tuples = list(
-            self.openfga_read_tuples({
-                "user": f"user:{user_id}",
-                "object": "system:",
-            })
+            self.openfga_read_tuples({"user": actor, "object": "system:"})
         )
         self.openfga_remove_tuples(system_tuples)
 
@@ -906,9 +926,11 @@ class OpenFGA(base.AssignmentDriverBase):
         fga_read_tuples_request: dict[str, str] = {}
         if actor_id:
             if assignment_type == "UserSystem":
-                fga_read_tuples_request["user"] = f"user:{actor_id[0]}"
+                fga_read_tuples_request["user"] = get_openfga_user_identifier(
+                    actor_id
+                )
             elif assignment_type == "GroupSystem":
-                fga_read_tuples_request["user"] = f"group:{actor_id[0]}"
+                fga_read_tuples_request["user"] = f"group:{actor_id}"
 
         if target_id:
             fga_read_tuples_request["object"] = f"system:{target_id}"
@@ -951,7 +973,7 @@ class OpenFGA(base.AssignmentDriverBase):
         # Actor may be user
         fga_checks.append({
             "tuple_key": {
-                "user": f"user:{actor_id}",
+                "user": get_openfga_user_identifier(actor_id),
                 "object": f"system:{target_id}",
                 "relation": relation,
             }
@@ -984,7 +1006,10 @@ class OpenFGA(base.AssignmentDriverBase):
         relation = get_relation_by_role_name(self._get_roles_by_id()[role_id])
         # Try to delete relation for user and then group. If none found (both
         # return 400 as not found) raise RoleAssignmentNotFound
-        for actor in [f"user:{actor_id}", f"group:{actor_id}"]:
+        for actor in [
+            get_openfga_user_identifier(actor_id),
+            f"group:{actor_id}",
+        ]:
             try:
                 self.openfga_write(
                     "delete",
