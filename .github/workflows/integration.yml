@@ -81,8 +81,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Start memcached
+        run: docker run -d --name memcached -p 11211:11211 memcached memcached -vv
+
       - name: Install necessary python packages
-        run: pip install keystone uwsgi psycopg2 .
+        run: pip install keystone uwsgi psycopg2 dogpile.cache[pymemcache] pymemcache .
 
       - name: Prepare keystone config file
         env:
@@ -103,6 +106,9 @@ jobs:
           [assignment]
           driver = ${{ matrix.backend }}
 
+          [role]
+          caching = false
+
           [database]
           connection = postgresql://keystone:1234@127.0.0.1:5433/keystone
 
@@ -111,6 +117,15 @@ jobs:
 
           [fernet_tokens]
           key_repository = $(pwd)/etc/fernet
+
+          [cache]
+          enabled = true
+          backend = dogpile.cache.pymemcache
+          backend_argument = memcached_expire_time:3660
+          expiration_time = 3600
+          memcache_servers = 127.0.0.1:11211
+          config_prefix = cache.keystone
+          debug_cache_backend = true
           EOF
           cat etc/keystone.conf
 
@@ -144,6 +159,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Run the tests
+        env:
+          OPENFGA_STORE_ID: ${{ steps.store.outputs.store_id }}
+          OPENFGA_MODEL_ID: ${{ steps.store.outputs.model_id }}
         run: uv run pytest keystone_role_assignment_openfga/tests/functional
 
       - name: Dump python keystone log
@@ -153,3 +171,7 @@ jobs:
       - name: Dump fga log
         if: always()
         run: cat fga.log
+
+      - name: Dump memcached log
+        if: always()
+        run: docker logs memcached

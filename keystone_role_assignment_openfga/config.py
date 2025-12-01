@@ -36,6 +36,11 @@ openfga_opts = [
         help="Role name to the OpenFGA permission name mapping (i.e. "
         "'member:can_become_member,reader:can_become_reader').",
     ),
+    cfg.BoolOpt(
+        "caching",
+        default=True,
+        help="Replacement caching of the SQL backend assignments.",
+    ),
 ]
 
 

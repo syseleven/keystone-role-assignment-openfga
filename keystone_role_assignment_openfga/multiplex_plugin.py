@@ -13,10 +13,10 @@
 import typing as ty
 
 import keystone.conf
-import oslo_config
 from keystone import exception
 from keystone.assignment.backends import base, sql
-from keystone.common import provider_api
+from keystone.common import cache, provider_api
+from oslo_config.cfg import ConfigOpts
 from oslo_log import log
 
 from keystone_role_assignment_openfga import config
@@ -26,9 +26,13 @@ CONF = keystone.conf.CONF
 LOG = log.getLogger(__name__)
 PROVIDERS = provider_api.ProviderAPIs
 
+CACHE_REGION = cache.create_region("openfga-multiplex")
+cache.configure_cache(CACHE_REGION)
+cache.configure_invalidation_region()
+
 
 class OpenFGASqlMultiplex(base.AssignmentDriverBase):
-    conf: oslo_config.cfg.ConfigOpts
+    conf: ConfigOpts
 
     @classmethod
     def default_role_driver(cls) -> str:
@@ -42,6 +46,7 @@ class OpenFGASqlMultiplex(base.AssignmentDriverBase):
         self.openfga = OpenFGA()
         self.sql = sql.Assignment()
 
+    @CACHE_REGION.cache_on_arguments()
     def should_use_sql_backend(
         self,
         user_id: ty.Optional[str] = None,
@@ -318,8 +323,8 @@ class OpenFGASqlMultiplex(base.AssignmentDriverBase):
                 role_id=role_id,
                 user_id=user_id,
                 group_ids=group_ids,
-                project_ids=project_ids,
                 domain_id=domain_id,
+                project_ids=project_ids,
                 inherited_to_projects=inherited_to_projects,
             )
 
