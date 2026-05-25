@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       - name: Install OpenFGA server
-        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        uses: jaxxstorm/action-install-gh-release@v3.0.0
         with:
           repo: openfga/openfga
           tag: v1.10.3
@@ -59,7 +59,7 @@ jobs:
         run: openfga run > fga.log 2>&1 &
 
       - name: Install OpenFGA cli
-        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        uses: jaxxstorm/action-install-gh-release@v3.0.0
         with:
           repo: openfga/cli
           cache: enable
