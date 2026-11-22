@@ -65,7 +65,7 @@ jobs:
           cache: enable
 
       - name: Install jq
-        uses: dcarbone/install-jq-action@v3
+        uses: dcarbone/install-jq-action@v4
 
       - name: Create store with model
         id: 'store'
